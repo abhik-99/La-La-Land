@@ -1,7 +1,7 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.17;
 
-import "@openzeppelin/contracts/utils/Context.sol"
+import "@openzeppelin/contracts/utils/Context.sol";
 import "./interfaces/IJAGDexFactory.sol";
 import "./JAGDexPair.sol";
 
@@ -12,14 +12,14 @@ contract JAGDexFactory is Context, IJAGDexFactory {
     mapping(address => mapping(address => address)) public getPair;
     address[] public allPairs;
 
-    event PairCreated(
-        address indexed token0,
-        address indexed token1,
-        address pair,
-        uint
-    );
+    // event PairCreated(
+    //     address indexed token0,
+    //     address indexed token1,
+    //     address pair,
+    //     uint
+    // );
 
-    constructor(address _feeToSetter) public {
+    constructor(address _feeToSetter) {
         feeToSetter = _feeToSetter;
     }
 

@@ -1,15 +1,19 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.17;
 
+import "@openzeppelin/contracts/utils/Context.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
+import './libraries/UQ112x112.sol';
 import "./interfaces/IJAGDexPair.sol";
 import "./interfaces/IJAGDexCallee.sol";
 import "./interfaces/IJAGDexFactory.sol";
+
 import "./JAGDexERC20.sol";
 
-contract JAGDexPair is IJAGDexPair, JAGDexERC20 {
+contract JAGDexPair is Context, JAGDexERC20 {
+    using UQ112x112 for uint224;
     uint public constant MINIMUM_LIQUIDITY = 10 ** 3;
     bytes4 private constant SELECTOR =
         bytes4(keccak256(bytes("transfer(address,uint256)")));
@@ -75,13 +79,13 @@ contract JAGDexPair is IJAGDexPair, JAGDexERC20 {
     );
     event Sync(uint112 reserve0, uint112 reserve1);
 
-    constructor() public {
-        factory = msg.sender;
+    constructor() {
+        factory = _msgSender();
     }
 
     // called once by the factory at time of deployment
     function initialize(address _token0, address _token1) external {
-        require(msg.sender == factory, "JAGDex: FORBIDDEN"); // sufficient check
+        require(_msgSender() == factory, "JAGDex: FORBIDDEN"); // sufficient check
         token0 = _token0;
         token1 = _token1;
     }
@@ -94,7 +98,7 @@ contract JAGDexPair is IJAGDexPair, JAGDexERC20 {
         uint112 _reserve1
     ) private {
         require(
-            balance0 <= uint112(-1) && balance1 <= uint112(-1),
+            balance0 <= type(uint112).max && balance1 <= type(uint112).max,
             "JAGDex: OVERFLOW"
         );
         uint32 blockTimestamp = uint32(block.timestamp % 2 ** 32);
@@ -127,7 +131,7 @@ contract JAGDexPair is IJAGDexPair, JAGDexERC20 {
                 uint rootK = Math.sqrt(uint(_reserve0) * _reserve1);
                 uint rootKLast = Math.sqrt(_kLast);
                 if (rootK > rootKLast) {
-                    uint numerator = totalSupply * (rootK - rootKLast);
+                    uint numerator = totalSupply() * (rootK - rootKLast);
                     uint denominator = (rootK * 5) + rootKLast;
                     uint liquidity = numerator / denominator;
                     if (liquidity > 0) _mint(feeTo, liquidity);
@@ -147,7 +151,7 @@ contract JAGDexPair is IJAGDexPair, JAGDexERC20 {
         uint amount1 = balance1 - _reserve1;
 
         bool feeOn = _mintFee(_reserve0, _reserve1);
-        uint _totalSupply = totalSupply; // gas savings, must be defined here since totalSupply can update in _mintFee
+        uint _totalSupply = totalSupply(); // gas savings, must be defined here since totalSupply can update in _mintFee
         if (_totalSupply == 0) {
             liquidity = Math.sqrt(amount0 * amount1) - MINIMUM_LIQUIDITY;
             _mint(address(0), MINIMUM_LIQUIDITY); // permanently lock the first MINIMUM_LIQUIDITY tokens
@@ -162,7 +166,7 @@ contract JAGDexPair is IJAGDexPair, JAGDexERC20 {
 
         _update(balance0, balance1, _reserve0, _reserve1);
         if (feeOn) kLast = uint(reserve0) * reserve1; // reserve0 and reserve1 are up-to-date
-        emit Mint(msg.sender, amount0, amount1);
+        emit Mint(_msgSender(), amount0, amount1);
     }
 
     // this low-level function should be called from a contract which performs important safety checks
@@ -174,10 +178,10 @@ contract JAGDexPair is IJAGDexPair, JAGDexERC20 {
         address _token1 = token1; // gas savings
         uint balance0 = IERC20(_token0).balanceOf(address(this));
         uint balance1 = IERC20(_token1).balanceOf(address(this));
-        uint liquidity = balanceOf[address(this)];
+        uint liquidity = balanceOf(address(this));
 
         bool feeOn = _mintFee(_reserve0, _reserve1);
-        uint _totalSupply = totalSupply; // gas savings, must be defined here since totalSupply can update in _mintFee
+        uint _totalSupply = totalSupply(); // gas savings, must be defined here since totalSupply can update in _mintFee
         amount0 = (liquidity * balance0) / _totalSupply; // using balances ensures pro-rata distribution
         amount1 = (liquidity * balance1) / _totalSupply; // using balances ensures pro-rata distribution
         require(
@@ -192,7 +196,7 @@ contract JAGDexPair is IJAGDexPair, JAGDexERC20 {
 
         _update(balance0, balance1, _reserve0, _reserve1);
         if (feeOn) kLast = uint(reserve0) * reserve1; // reserve0 and reserve1 are up-to-date
-        emit Burn(msg.sender, amount0, amount1, to);
+        emit Burn(_msgSender(), amount0, amount1, to);
     }
 
     // this low-level function should be called from a contract which performs important safety checks
@@ -223,7 +227,7 @@ contract JAGDexPair is IJAGDexPair, JAGDexERC20 {
             if (amount1Out > 0) _safeTransfer(_token1, to, amount1Out); // optimistically transfer tokens
             if (data.length > 0)
                 IJAGDexCallee(to).jagdexCall(
-                    msg.sender,
+                    _msgSender(),
                     amount0Out,
                     amount1Out,
                     data
@@ -253,7 +257,7 @@ contract JAGDexPair is IJAGDexPair, JAGDexERC20 {
         }
 
         _update(balance0, balance1, _reserve0, _reserve1);
-        emit Swap(msg.sender, amount0In, amount1In, amount0Out, amount1Out, to);
+        emit Swap(_msgSender(), amount0In, amount1In, amount0Out, amount1Out, to);
     }
 
     // force balances to match reserves
